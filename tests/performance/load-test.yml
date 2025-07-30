@@ -1,0 +1,24 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 120   # 2 minutes
+      arrivalRate: 30 # 30 new users/second
+  defaults:
+    headers:
+      Content-Type: "application/json"
+scenarios:
+  - name: "Place order and capture"
+    flow:
+      - post:
+          url: "/orders"
+          json:
+            amount: 1000
+            currency: "INR"
+            receipt: "load_{{ $randomInt(1, 100000) }}"
+      - think: 1
+      - post:
+          url: "/razorpay/webhook"
+          json:
+            event: "payment.captured"
+            payload:
+              order_id: "{{ order_id }}"

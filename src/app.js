@@ -1,10 +1,14 @@
 import express from 'express';
 import helmet from 'helmet'; 
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
+import rateLimit from './middleware/rateLimit.js';
 import routes from './routes.js';
 import { logger } from './utils/logger.js';
 import morgan from 'morgan';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 

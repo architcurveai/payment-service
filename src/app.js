@@ -17,9 +17,11 @@ app.use(helmet());
 app.use(helmet.hsts({ maxAge: 63072000 })); // 2 years
 
 // CORS (restrict origins)
-app.use(cors({ origin: process.env.ALLOWED_ORIGINS.split(','), methods: ['POST','GET'] }));
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000'];
+app.use(cors({ origin: allowedOrigins, methods: ['POST','GET'] }));
 
 // Body Parsing
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '100kb' }));
 
 // Request Logging

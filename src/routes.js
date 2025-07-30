@@ -1,7 +1,7 @@
 import express from 'express';
 import { createOrder, capturePayment, verifyWebhook } from './controllers/paymentController.js';
 import { authenticate } from './middleware/auth.js';
-import { validatePayment } from './middleware/validate.js';
+import { validatePayment, validateCapture } from './middleware/validate.js';
 
 const router = express.Router();
 
@@ -9,7 +9,7 @@ const router = express.Router();
 router.post('/create-order', authenticate, validatePayment, createOrder);
 
 // Capture payment
-router.post('/capture', authenticate, capturePayment);
+router.post('/capture', authenticate, validateCapture, capturePayment);
 
 // Webhook for payment verification
 router.post('/webhook', verifyWebhook);

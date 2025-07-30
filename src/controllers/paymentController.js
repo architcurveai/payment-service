@@ -39,23 +39,40 @@ export const verifyWebhook = async (req, res, next) => {
     const webhookSignature = req.headers['x-razorpay-signature'];
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
     
-    const body = JSON.stringify(req.body);
+    if (!webhookSecret) {
+      logger.error('Webhook secret not configured');
+      return res.status(500).json({ error: 'Webhook secret not configured' });
+    }
+    
+    // Handle both raw and JSON body
+    const body = Buffer.isBuffer(req.body) ? req.body.toString() : JSON.stringify(req.body);
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
       .update(body)
       .digest('hex');
     
-    if (webhookSignature === expectedSignature) {
+    // Use timing-safe comparison
+    const isValid = crypto.timingSafeEqual(
+      Buffer.from(webhookSignature || '', 'hex'),
+      Buffer.from(expectedSignature, 'hex')
+    );
+    
+    if (isValid) {
       logger.info('Webhook verified successfully');
-      // Process the webhook event
-      const event = req.body.event;
-      const paymentEntity = req.body.payload.payment.entity;
+      
+      // Parse body if it's a buffer
+      const parsedBody = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
+      const event = parsedBody.event;
+      const paymentEntity = parsedBody.payload?.payment?.entity;
       
       logger.info(`Webhook event: ${event}`, paymentEntity);
       
       res.json({ status: 'ok' });
     } else {
-      logger.error('Webhook signature verification failed');
+      logger.error('Webhook signature verification failed', {
+        received: webhookSignature,
+        expected: expectedSignature
+      });
       res.status(400).json({ error: 'Invalid signature' });
     }
   } catch (error) {

@@ -82,5 +82,35 @@ export const razorpayService = {
       logger.error('Razorpay refund failed:', error);
       throw error;
     }
+  },
+
+  async fetchOrder(orderId) {
+    try {
+      const rzp = initializeRazorpay();
+      if (!rzp) {
+        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+      }
+      
+      const order = await rzp.orders.fetch(orderId);
+      return order;
+    } catch (error) {
+      logger.error('Razorpay order fetch failed:', error);
+      throw error;
+    }
+  },
+
+  async fetchRefund(refundId) {
+    try {
+      const rzp = initializeRazorpay();
+      if (!rzp) {
+        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+      }
+      
+      const refund = await rzp.refunds.fetch(refundId);
+      return refund;
+    } catch (error) {
+      logger.error('Razorpay refund fetch failed:', error);
+      throw error;
+    }
   }
 };

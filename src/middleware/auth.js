@@ -19,3 +19,12 @@ export const authenticate = (req, res, next) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 };
+
+export const extractUserId = (req, res, next) => {
+  const userId = req.user?.userId || req.user?.sub;
+  if (!userId) {
+    return next(new Error('User ID is required'));
+  }
+  req.userId = userId;
+  next();
+};

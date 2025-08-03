@@ -4,15 +4,21 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ENUM Types for Statuses and Categories
+CREATE TYPE payment_order_status AS ENUM ('created', 'attempted', 'paid', 'failed');
+CREATE TYPE payment_link_status AS ENUM ('paid', 'partially_paid', 'expired', 'cancelled');
+CREATE TYPE severity_level AS ENUM ('high', 'medium', 'low');
+
 -- Payment Orders Table
 CREATE TABLE IF NOT EXISTS payment_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL,
+    user_id UUID NOT NULL
+        REFERENCES auth.users(id) ON DELETE CASCADE,
     razorpay_order_id VARCHAR(255) UNIQUE NOT NULL,
-    amount INTEGER NOT NULL, -- Amount in smallest currency unit (paise for INR)
+    amount INTEGER NOT NULL CHECK (amount >= 0), -- Amount in smallest currency unit (paise for INR)
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
     receipt VARCHAR(255),
-    status VARCHAR(50) NOT NULL DEFAULT 'created', -- created, attempted, paid, failed
+    status payment_order_status NOT NULL DEFAULT 'created',
     notes JSONB DEFAULT '{}',
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -26,17 +32,17 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
     user_id UUID NOT NULL,
     razorpay_payment_id VARCHAR(255) UNIQUE NOT NULL,
     razorpay_order_id VARCHAR(255) NOT NULL,
-    amount INTEGER NOT NULL,
+    amount INTEGER NOT NULL CHECK (amount >= 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
-    status VARCHAR(50) NOT NULL, -- created, authorized, captured, refunded, failed
+    status payment_transaction_status NOT NULL,
     method VARCHAR(50), -- card, netbanking, wallet, upi, etc.
     bank VARCHAR(100),
     wallet VARCHAR(100),
     vpa VARCHAR(255), -- For UPI
     email VARCHAR(255),
     contact VARCHAR(20),
-    fee INTEGER DEFAULT 0,
-    tax INTEGER DEFAULT 0,
+    fee INTEGER DEFAULT 0 CHECK (fee >= 0),
+    tax INTEGER DEFAULT 0 CHECK (tax >= 0),
     error_code VARCHAR(100),
     error_description TEXT,
     error_source VARCHAR(100),
@@ -55,13 +61,62 @@ CREATE TABLE IF NOT EXISTS payment_refunds (
     user_id UUID NOT NULL,
     razorpay_refund_id VARCHAR(255) UNIQUE NOT NULL,
     razorpay_payment_id VARCHAR(255) NOT NULL,
-    amount INTEGER NOT NULL,
+    amount INTEGER NOT NULL CHECK (amount >= 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
-    status VARCHAR(50) NOT NULL, -- pending, processed, failed
+    status payment_refund_status NOT NULL,
     speed VARCHAR(20) DEFAULT 'normal', -- normal, optimum
     receipt VARCHAR(255),
     notes JSONB DEFAULT '{}',
     acquirer_data JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Payment Disputes Table
+CREATE TABLE IF NOT EXISTS payment_disputes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_id UUID REFERENCES payment_transactions(id) ON DELETE CASCADE,
+    razorpay_payment_id VARCHAR(255) NOT NULL,
+    dispute_id VARCHAR(255) UNIQUE NOT NULL,
+    amount INTEGER NOT NULL CHECK (amount >= 0),
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    status payment_dispute_status NOT NULL,
+    reason_code VARCHAR(100),
+    reason_description TEXT,
+    respond_by TIMESTAMP WITH TIME ZONE,
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    evidence JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Invoice Events Table
+CREATE TABLE IF NOT EXISTS invoice_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    razorpay_invoice_id VARCHAR(255) UNIQUE NOT NULL,
+    status invoice_status NOT NULL,
+    amount INTEGER NOT NULL CHECK (amount >= 0),
+    amount_paid INTEGER DEFAULT 0 CHECK (amount_paid >= 0),
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    customer_id VARCHAR(255),
+    paid_at TIMESTAMP WITH TIME ZONE,
+    expired_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Payment Link Events Table
+CREATE TABLE IF NOT EXISTS payment_link_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    razorpay_payment_link_id VARCHAR(255) UNIQUE NOT NULL,
+    status payment_link_status NOT NULL,
+    amount INTEGER NOT NULL CHECK (amount >= 0),
+    amount_paid INTEGER DEFAULT 0 CHECK (amount_paid >= 0),
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    customer_id VARCHAR(255),
+    paid_at TIMESTAMP WITH TIME ZONE,
+    expired_at TIMESTAMP WITH TIME ZONE,
+    cancelled_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -81,49 +136,16 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Payment Disputes Table
-CREATE TABLE IF NOT EXISTS payment_disputes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    payment_id UUID REFERENCES payment_transactions(id) ON DELETE CASCADE,
-    razorpay_payment_id VARCHAR(255) NOT NULL,
-    dispute_id VARCHAR(255) UNIQUE NOT NULL,
-    amount INTEGER NOT NULL,
-    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
-    status VARCHAR(50) NOT NULL, -- created, won, lost, closed, under_review, action_required
-    reason_code VARCHAR(100),
-    reason_description TEXT,
-    respond_by TIMESTAMP WITH TIME ZONE,
-    resolved_at TIMESTAMP WITH TIME ZONE,
-    evidence JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- Downtime Events Table
 CREATE TABLE IF NOT EXISTS downtime_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     razorpay_downtime_id VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50) NOT NULL, -- started, updated, resolved
+    status downtime_status NOT NULL,
     method VARCHAR(50), -- card, netbanking, upi, etc.
     begin TIMESTAMP WITH TIME ZONE,
     end_time TIMESTAMP WITH TIME ZONE,
-    severity VARCHAR(20), -- high, medium, low
+    severity severity_level, -- high, medium, low
     resolved_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Invoice Events Table
-CREATE TABLE IF NOT EXISTS invoice_events (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    razorpay_invoice_id VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50) NOT NULL, -- paid, partially_paid, expired
-    amount INTEGER NOT NULL,
-    amount_paid INTEGER DEFAULT 0,
-    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
-    customer_id VARCHAR(255),
-    paid_at TIMESTAMP WITH TIME ZONE,
-    expired_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -132,7 +154,7 @@ CREATE TABLE IF NOT EXISTS invoice_events (
 CREATE TABLE IF NOT EXISTS fund_account_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     razorpay_fund_account_id VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50) NOT NULL, -- validation_completed, validation_failed
+    status fund_account_status NOT NULL,
     account_type VARCHAR(50), -- bank_account, vpa, card
     bank_account JSONB,
     validation_id VARCHAR(255),
@@ -145,25 +167,9 @@ CREATE TABLE IF NOT EXISTS fund_account_events (
 CREATE TABLE IF NOT EXISTS account_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     razorpay_account_id VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50) NOT NULL, -- instantly_activated, activated_kyc_pending
+    status account_status NOT NULL,
     activated_at TIMESTAMP WITH TIME ZONE,
     kyc_pending_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Payment Link Events Table
-CREATE TABLE IF NOT EXISTS payment_link_events (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    razorpay_payment_link_id VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50) NOT NULL, -- paid, partially_paid, expired, cancelled
-    amount INTEGER NOT NULL,
-    amount_paid INTEGER DEFAULT 0,
-    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
-    customer_id VARCHAR(255),
-    paid_at TIMESTAMP WITH TIME ZONE,
-    expired_at TIMESTAMP WITH TIME ZONE,
-    cancelled_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -186,42 +192,31 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_payment_orders_user_id ON payment_orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_status ON payment_orders(status);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_created_at ON payment_orders(created_at);
-CREATE INDEX IF NOT EXISTS idx_payment_orders_razorpay_order_id ON payment_orders(razorpay_order_id);
 
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_user_id ON payment_transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(status);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_created_at ON payment_transactions(created_at);
-CREATE INDEX IF NOT EXISTS idx_payment_transactions_razorpay_payment_id ON payment_transactions(razorpay_payment_id);
-CREATE INDEX IF NOT EXISTS idx_payment_transactions_razorpay_order_id ON payment_transactions(razorpay_order_id);
 
 CREATE INDEX IF NOT EXISTS idx_payment_refunds_user_id ON payment_refunds(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_refunds_status ON payment_refunds(status);
-CREATE INDEX IF NOT EXISTS idx_payment_refunds_razorpay_refund_id ON payment_refunds(razorpay_refund_id);
 
-CREATE INDEX IF NOT EXISTS idx_webhook_events_event_type ON webhook_events(event_type);
-CREATE INDEX IF NOT EXISTS idx_webhook_events_processed ON webhook_events(processed);
-CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at ON webhook_events(created_at);
-CREATE INDEX IF NOT EXISTS idx_webhook_events_razorpay_event_id ON webhook_events(razorpay_event_id);
-
-CREATE INDEX IF NOT EXISTS idx_payment_disputes_payment_id ON payment_disputes(payment_id);
+CREATE INDEX IF NOT EXISTS idx_payment_disputes_user_id ON payment_disputes(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_disputes_status ON payment_disputes(status);
-CREATE INDEX IF NOT EXISTS idx_payment_disputes_dispute_id ON payment_disputes(dispute_id);
 
 CREATE INDEX IF NOT EXISTS idx_downtime_events_status ON downtime_events(status);
-CREATE INDEX IF NOT EXISTS idx_downtime_events_method ON downtime_events(method);
-CREATE INDEX IF NOT EXISTS idx_downtime_events_created_at ON downtime_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_downtime_events_severity ON downtime_events(severity);
 
 CREATE INDEX IF NOT EXISTS idx_invoice_events_status ON invoice_events(status);
-CREATE INDEX IF NOT EXISTS idx_invoice_events_razorpay_invoice_id ON invoice_events(razorpay_invoice_id);
 
 CREATE INDEX IF NOT EXISTS idx_fund_account_events_status ON fund_account_events(status);
-CREATE INDEX IF NOT EXISTS idx_fund_account_events_razorpay_fund_account_id ON fund_account_events(razorpay_fund_account_id);
 
 CREATE INDEX IF NOT EXISTS idx_account_events_status ON account_events(status);
-CREATE INDEX IF NOT EXISTS idx_account_events_razorpay_account_id ON account_events(razorpay_account_id);
 
 CREATE INDEX IF NOT EXISTS idx_payment_link_events_status ON payment_link_events(status);
-CREATE INDEX IF NOT EXISTS idx_payment_link_events_razorpay_payment_link_id ON payment_link_events(razorpay_payment_link_id);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_source ON webhook_events(source);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_event ON webhook_events(event);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at ON webhook_events(created_at);
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
@@ -229,12 +224,17 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 
 -- Update triggers for updated_at columns
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$;
+
+REVOKE ALL ON FUNCTION update_updated_at_column() FROM PUBLIC;
 
 CREATE TRIGGER update_payment_orders_updated_at BEFORE UPDATE ON payment_orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_payment_transactions_updated_at BEFORE UPDATE ON payment_transactions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -248,33 +248,45 @@ ALTER TABLE webhook_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for payment_orders
-CREATE POLICY "Users can view their own payment orders" ON payment_orders
-    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own payment orders" ON payment_orders
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Service role can manage all payment orders" ON payment_orders
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL TO service_role USING (true);
 
 -- RLS Policies for payment_transactions
-CREATE POLICY "Users can view their own payment transactions" ON payment_transactions
-    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own payment transactions" ON payment_transactions
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Service role can manage all payment transactions" ON payment_transactions
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL TO service_role USING (true);
 
 -- RLS Policies for payment_refunds
-CREATE POLICY "Users can view their own payment refunds" ON payment_refunds
-    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own payment refunds" ON payment_refunds
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Service role can manage all payment refunds" ON payment_refunds
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL TO service_role USING (true);
 
 -- RLS Policies for webhook_events (service role only)
+-- Deny all access by default. The service_role policy will override this.
+CREATE POLICY "Deny all access to webhook events by default" ON webhook_events
+    FOR ALL USING (false);
+
 CREATE POLICY "Service role can manage all webhook events" ON webhook_events
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL TO service_role USING (true);
 
 -- RLS Policies for audit_logs
-CREATE POLICY "Users can view their own audit logs" ON audit_logs
-    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own audit logs" ON audit_logs
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Service role can manage all audit logs" ON audit_logs
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL TO service_role USING (true);

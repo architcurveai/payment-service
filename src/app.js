@@ -6,6 +6,7 @@ import rateLimit from './middleware/rateLimit.js';
 import routes from './routes.js';
 import { logger } from './utils/logger.js';
 import morgan from 'morgan';
+import { setupBullBoard } from './services/bullBoardService.js';
 
 // Load environment variables
 dotenv.config();
@@ -33,6 +34,23 @@ app.use(rateLimit);
 // Routes
 app.use('/api/payments', routes);
 
+// Initialize Bull Board Dashboard (after routes to ensure queue is initialized)
+async function initializeBullBoard() {
+  try {
+    const { queueService } = await import('./services/queueService.js');
+    const queue = await queueService.waitForQueue(); 
+    if (queue) {
+      setupBullBoard(app, [queue]);
+      logger.info('Bull Board dashboard initialized successfully');
+    } 
+  } catch (error) {
+    logger.warn('Bull Board initialization failed:', error.message);
+  }
+}
+
+// Initialize with proper async handling
+initializeBullBoard();
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   logger.error(err);
@@ -40,4 +58,10 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => logger.info(`Payment service running on port ${PORT}`));
+const HOST = process.env.HOST || 'localhost';
+
+app.listen(PORT, HOST, () => {
+  logger.info(`Payment service running on ${HOST}:${PORT}`);
+  const dashboardUrl = `http://${HOST}:${PORT}/admin/queues`;
+  logger.info(`Bull Board dashboard will be available at: ${dashboardUrl}`);
+});

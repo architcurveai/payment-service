@@ -20,97 +20,78 @@ const initializeRazorpay = () => {
   return razorpay;
 };
 
+const executeRazorpayOperation = async (operationName, operation) => {
+  try {
+    const rzp = initializeRazorpay();
+    if (!rzp) {
+      throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+    }
+    
+    return await operation(rzp);
+  } catch (error) {
+    logger.error(`Razorpay ${operationName} failed:`, error);
+    throw error;
+  }
+};
+
 export const razorpayService = {
   async createOrder(options) {
-    try {
-      const rzp = initializeRazorpay();
-      if (!rzp) {
-        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
-      }
-      
+    if (!options) {
+      throw new Error('Order options are required');
+    }
+
+    return executeRazorpayOperation('order creation', async (rzp) => {
       const order = await rzp.orders.create(options);
       logger.info(`Razorpay order created: ${order.id}`);
       return order;
-    } catch (error) {
-      logger.error('Razorpay order creation failed:', error);
-      throw error;
-    }
+    });
   },
 
   async capturePayment(paymentId, amount) {
-    try {
-      const rzp = initializeRazorpay();
-      if (!rzp) {
-        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
-      }
-      
+    if (!paymentId || !amount) {
+      throw new Error('Payment ID and amount are required');
+    }
+
+    return executeRazorpayOperation('payment capture', async (rzp) => {
       const payment = await rzp.payments.capture(paymentId, amount);
       logger.info(`Razorpay payment captured: ${paymentId}`);
       return payment;
-    } catch (error) {
-      logger.error('Razorpay payment capture failed:', error);
-      throw error;
-    }
+    });
   },
 
   async fetchPayment(paymentId) {
-    try {
-      const rzp = initializeRazorpay();
-      if (!rzp) {
-        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
-      }
-      
-      const payment = await rzp.payments.fetch(paymentId);
-      return payment;
-    } catch (error) {
-      logger.error('Razorpay payment fetch failed:', error);
-      throw error;
+    if (!paymentId) {
+      throw new Error('Payment ID is required');
     }
+
+    return executeRazorpayOperation('payment fetch', rzp => rzp.payments.fetch(paymentId));
   },
 
   async refundPayment(paymentId, options = {}) {
-    try {
-      const rzp = initializeRazorpay();
-      if (!rzp) {
-        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
-      }
-      
+    if (!paymentId) {
+      throw new Error('Payment ID is required');
+    }
+
+    return executeRazorpayOperation('refund creation', async (rzp) => {
       const refund = await rzp.payments.refund(paymentId, options);
       logger.info(`Razorpay refund created: ${refund.id}`);
       return refund;
-    } catch (error) {
-      logger.error('Razorpay refund failed:', error);
-      throw error;
-    }
+    });
   },
 
   async fetchOrder(orderId) {
-    try {
-      const rzp = initializeRazorpay();
-      if (!rzp) {
-        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
-      }
-      
-      const order = await rzp.orders.fetch(orderId);
-      return order;
-    } catch (error) {
-      logger.error('Razorpay order fetch failed:', error);
-      throw error;
+    if (!orderId) {
+      throw new Error('Order ID is required');
     }
+
+    return executeRazorpayOperation('order fetch', rzp => rzp.orders.fetch(orderId));
   },
 
   async fetchRefund(refundId) {
-    try {
-      const rzp = initializeRazorpay();
-      if (!rzp) {
-        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
-      }
-      
-      const refund = await rzp.refunds.fetch(refundId);
-      return refund;
-    } catch (error) {
-      logger.error('Razorpay refund fetch failed:', error);
-      throw error;
+    if (!refundId) {
+      throw new Error('Refund ID is required');
     }
+
+    return executeRazorpayOperation('refund fetch', rzp => rzp.refunds.fetch(refundId));
   }
 };

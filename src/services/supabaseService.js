@@ -25,466 +25,230 @@ const initializeSupabase = () => {
   return supabase;
 };
 
+const executeQuery = async (operation, tableName, logMessageFn) => {
+  try {
+    const client = initializeSupabase();
+    const { data, error } = await operation(client);
+
+    if (error) {
+      throw error;
+    }
+
+    if (logMessageFn) {
+      logger.info(logMessageFn(data));
+    }
+
+    return data;
+  } catch (error) {
+    logger.error(`Error with ${tableName}:`, error);
+    throw error;
+  }
+};
+
 export const supabaseService = {
   // Payment Orders
   async createPaymentOrder(orderData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_orders')
-        .insert([orderData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Payment order created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating payment order in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_orders').insert([orderData]).select().single(),
+      'payment_orders',
+      (data) => `Payment order created in DB: ${data.id}`
+    );
   },
 
   async updatePaymentOrder(orderId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_orders')
-        .update(updateData)
-        .eq('razorpay_order_id', orderId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Payment order updated in DB: ${orderId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating payment order in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_orders').update(updateData).eq('razorpay_order_id', orderId).select().single(),
+      'payment_orders',
+      () => `Payment order updated in DB: ${orderId}`
+    );
   },
 
   async getPaymentOrder(orderId) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_orders')
-        .select('*')
-        .eq('razorpay_order_id', orderId)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      logger.error('Error fetching payment order from DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_orders').select('*').eq('razorpay_order_id', orderId).single(),
+      'payment_orders'
+    );
   },
 
   async getUserPaymentOrders(userId, limit = 10, offset = 0) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_orders')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      logger.error('Error fetching user payment orders from DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_orders').select('*').eq('user_id', userId).order('created_at', { ascending: false }).range(offset, offset + limit - 1),
+      'payment_orders'
+    );
   },
 
   // Payment Transactions
   async createPaymentTransaction(transactionData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_transactions')
-        .insert([transactionData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Payment transaction created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating payment transaction in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_transactions').insert([transactionData]).select().single(),
+      'payment_transactions',
+      (data) => `Payment transaction created in DB: ${data.id}`
+    );
   },
 
   async updatePaymentTransaction(paymentId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_transactions')
-        .update(updateData)
-        .eq('razorpay_payment_id', paymentId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Payment transaction updated in DB: ${paymentId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating payment transaction in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_transactions').update(updateData).eq('razorpay_payment_id', paymentId).select().single(),
+      'payment_transactions',
+      () => `Payment transaction updated in DB: ${paymentId}`
+    );
   },
 
   async getPaymentTransaction(paymentId) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_transactions')
-        .select('*')
-        .eq('razorpay_payment_id', paymentId)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      logger.error('Error fetching payment transaction from DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_transactions').select('*').eq('razorpay_payment_id', paymentId).single(),
+      'payment_transactions'
+    );
   },
 
   // Webhook Events
   async createWebhookEvent(eventData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('webhook_events')
-        .insert([eventData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Webhook event created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating webhook event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('webhook_events').insert([eventData]).select().single(),
+      'webhook_events',
+      (data) => `Webhook event created in DB: ${data.id}`
+    );
   },
 
   async getWebhookEvent(eventId) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('webhook_events')
-        .select('*')
-        .eq('razorpay_event_id', eventId)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
-      return data;
-    } catch (error) {
-      logger.error('Error fetching webhook event from DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('webhook_events').select('*').eq('razorpay_event_id', eventId).single(),
+      'webhook_events'
+    );
+  },
+
+  async updateWebhookEvent(eventId, updateData) {
+    return executeQuery(
+      (client) => client.from('webhook_events').update(updateData).eq('razorpay_event_id', eventId).select().single(),
+      'webhook_events',
+      () => `Webhook event updated in DB: ${eventId}`
+    );
   },
 
   // Refunds
   async createRefund(refundData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_refunds')
-        .insert([refundData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Refund created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating refund in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_refunds').insert([refundData]).select().single(),
+      'payment_refunds',
+      (data) => `Refund created in DB: ${data.id}`
+    );
   },
 
   async updateRefund(refundId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_refunds')
-        .update(updateData)
-        .eq('razorpay_refund_id', refundId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Refund updated in DB: ${refundId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating refund in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_refunds').update(updateData).eq('razorpay_refund_id', refundId).select().single(),
+      'payment_refunds',
+      () => `Refund updated in DB: ${refundId}`
+    );
   },
 
   // Dispute Management
   async createDispute(disputeData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_disputes')
-        .insert([disputeData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Dispute created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating dispute in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_disputes').insert([disputeData]).select().single(),
+      'payment_disputes',
+      (data) => `Dispute created in DB: ${data.id}`
+    );
   },
 
   async updateDispute(disputeId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_disputes')
-        .update(updateData)
-        .eq('dispute_id', disputeId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Dispute updated in DB: ${disputeId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating dispute in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_disputes').update(updateData).eq('dispute_id', disputeId).select().single(),
+      'payment_disputes',
+      () => `Dispute updated in DB: ${disputeId}`
+    );
   },
 
   // Downtime Events
   async createDowntimeEvent(downtimeData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('downtime_events')
-        .insert([downtimeData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Downtime event created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating downtime event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('downtime_events').insert([downtimeData]).select().single(),
+      'downtime_events',
+      (data) => `Downtime event created in DB: ${data.id}`
+    );
   },
 
   async updateDowntimeEvent(downtimeId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('downtime_events')
-        .update(updateData)
-        .eq('razorpay_downtime_id', downtimeId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Downtime event updated in DB: ${downtimeId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating downtime event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('downtime_events').update(updateData).eq('razorpay_downtime_id', downtimeId).select().single(),
+      'downtime_events',
+      () => `Downtime event updated in DB: ${downtimeId}`
+    );
   },
 
   // Invoice Events
   async createInvoiceEvent(invoiceData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('invoice_events')
-        .insert([invoiceData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Invoice event created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating invoice event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('invoice_events').insert([invoiceData]).select().single(),
+      'invoice_events',
+      (data) => `Invoice event created in DB: ${data.id}`
+    );
   },
 
   async updateInvoiceEvent(invoiceId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('invoice_events')
-        .update(updateData)
-        .eq('razorpay_invoice_id', invoiceId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Invoice event updated in DB: ${invoiceId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating invoice event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('invoice_events').update(updateData).eq('razorpay_invoice_id', invoiceId).select().single(),
+      'invoice_events',
+      () => `Invoice event updated in DB: ${invoiceId}`
+    );
   },
 
   // Fund Account Events
   async createFundAccountEvent(fundAccountData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('fund_account_events')
-        .insert([fundAccountData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Fund account event created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating fund account event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('fund_account_events').insert([fundAccountData]).select().single(),
+      'fund_account_events',
+      (data) => `Fund account event created in DB: ${data.id}`
+    );
   },
 
   async updateFundAccountEvent(fundAccountId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('fund_account_events')
-        .update(updateData)
-        .eq('razorpay_fund_account_id', fundAccountId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Fund account event updated in DB: ${fundAccountId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating fund account event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('fund_account_events').update(updateData).eq('razorpay_fund_account_id', fundAccountId).select().single(),
+      'fund_account_events',
+      () => `Fund account event updated in DB: ${fundAccountId}`
+    );
   },
 
   // Account Events
   async createAccountEvent(accountData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('account_events')
-        .insert([accountData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Account event created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating account event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('account_events').insert([accountData]).select().single(),
+      'account_events',
+      (data) => `Account event created in DB: ${data.id}`
+    );
   },
 
   async updateAccountEvent(accountId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('account_events')
-        .update(updateData)
-        .eq('razorpay_account_id', accountId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Account event updated in DB: ${accountId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating account event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('account_events').update(updateData).eq('razorpay_account_id', accountId).select().single(),
+      'account_events',
+      () => `Account event updated in DB: ${accountId}`
+    );
   },
 
   // Payment Link Events
   async createPaymentLinkEvent(paymentLinkData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_link_events')
-        .insert([paymentLinkData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Payment link event created in DB: ${data.id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error creating payment link event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_link_events').insert([paymentLinkData]).select().single(),
+      'payment_link_events',
+      (data) => `Payment link event created in DB: ${data.id}`
+    );
   },
 
   async updatePaymentLinkEvent(paymentLinkId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_link_events')
-        .update(updateData)
-        .eq('razorpay_payment_link_id', paymentLinkId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Payment link event updated in DB: ${paymentLinkId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating payment link event in DB:', error);
-      throw error;
-    }
-  },
-
-  // Webhook Events
-  async updateWebhookEvent(eventId, updateData) {
-    try {
-      const client = initializeSupabase();
-      const { data, error } = await client
-        .from('webhook_events')
-        .update(updateData)
-        .eq('razorpay_event_id', eventId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      logger.info(`Webhook event updated in DB: ${eventId}`);
-      return data;
-    } catch (error) {
-      logger.error('Error updating webhook event in DB:', error);
-      throw error;
-    }
+    return executeQuery(
+      (client) => client.from('payment_link_events').update(updateData).eq('razorpay_payment_link_id', paymentLinkId).select().single(),
+      'payment_link_events',
+      () => `Payment link event updated in DB: ${paymentLinkId}`
+    );
   },
 
   // Health Check
   async healthCheck() {
     try {
       const client = initializeSupabase();
-      const { data, error } = await client
-        .from('payment_orders')
-        .select('count')
-        .limit(1);
-      
+      const { error } = await client.from('payment_orders').select('id', { count: 'exact', head: true });
       if (error) throw error;
       return { status: 'OK', service: 'supabase' };
     } catch (error) {

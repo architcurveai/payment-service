@@ -3,6 +3,7 @@ import IORedis from 'ioredis';
 import { logger } from '../utils/logger.js';
 import { supabaseService } from './supabaseService.js';
 import { razorpayService } from './razorpayService.js';
+import { addQueueToBullBoard } from './bullBoardService.js';
 
 let paymentQueue = null;
 let webhookWorker = null;
@@ -169,8 +170,44 @@ const initializeQueue = () => {
     });
 
     logger.info('BullMQ payment queue initialized successfully');
+    
+    // Add queue to Bull Board dashboard
+    addQueueToBullBoard(paymentQueue);
   }
   return paymentQueue;
+};
+
+const webhookEventHandlers = {
+  'payment.authorized': handlePaymentAuthorized,
+  'payment.captured': handlePaymentCaptured,
+  'payment.failed': handlePaymentFailed,
+  'order.paid': handleOrderPaid,
+  'order.notification.delivered': handleOrderNotificationDelivered,
+  'order.notification.failed': handleOrderNotificationFailed,
+  'refund.created': handleRefundCreated,
+  'refund.processed': handleRefundProcessed,
+  'refund.failed': handleRefundFailed,
+  'refund.speed_changed': handleRefundSpeedChanged,
+  'payment.dispute.created': handleDisputeCreated,
+  'payment.dispute.won': handleDisputeWon,
+  'payment.dispute.lost': handleDisputeLost,
+  'payment.dispute.closed': handleDisputeClosed,
+  'payment.dispute.under_review': handleDisputeUnderReview,
+  'payment.dispute.action_required': handleDisputeActionRequired,
+  'payment.downtime.started': handleDowntimeStarted,
+  'payment.downtime.updated': handleDowntimeUpdated,
+  'payment.downtime.resolved': handleDowntimeResolved,
+  'invoice.paid': handleInvoicePaid,
+  'invoice.partially_paid': handleInvoicePartiallyPaid,
+  'invoice.expired': handleInvoiceExpired,
+  'fund_account.validation.completed': handleFundAccountValidationCompleted,
+  'fund_account.validation.failed': handleFundAccountValidationFailed,
+  'account.instantly_activated': handleAccountInstantlyActivated,
+  'account.activated_kyc_pending': handleAccountActivatedKycPending,
+  'payment_link.paid': handlePaymentLinkPaid,
+  'payment_link.partially_paid': handlePaymentLinkPartiallyPaid,
+  'payment_link.expired': handlePaymentLinkExpired,
+  'payment_link.cancelled': handlePaymentLinkCancelled,
 };
 
 const processWebhookEvent = async (eventData) => {
@@ -179,119 +216,17 @@ const processWebhookEvent = async (eventData) => {
     
     logger.info(`Processing webhook event: ${event}`, { eventId });
 
-    // Route to appropriate handler based on event type
-    switch (event) {
-      // Payment Events
-      case 'payment.authorized':
-        await handlePaymentAuthorized(payload.payment.entity);
-        break;
-      case 'payment.captured':
-        await handlePaymentCaptured(payload.payment.entity);
-        break;
-      case 'payment.failed':
-        await handlePaymentFailed(payload.payment.entity);
-        break;
-      
-      // Order Events
-      case 'order.paid':
-        await handleOrderPaid(payload.order.entity);
-        break;
-      case 'order.notification.delivered':
-        await handleOrderNotificationDelivered(payload.order.entity);
-        break;
-      case 'order.notification.failed':
-        await handleOrderNotificationFailed(payload.order.entity);
-        break;
-      
-      // Refund Events
-      case 'refund.created':
-        await handleRefundCreated(payload.refund.entity);
-        break;
-      case 'refund.processed':
-        await handleRefundProcessed(payload.refund.entity);
-        break;
-      case 'refund.failed':
-        await handleRefundFailed(payload.refund.entity);
-        break;
-      case 'refund.speed_changed':
-        await handleRefundSpeedChanged(payload.refund.entity);
-        break;
-      
-      // Dispute Events
-      case 'payment.dispute.created':
-        await handleDisputeCreated(payload.payment.entity);
-        break;
-      case 'payment.dispute.won':
-        await handleDisputeWon(payload.payment.entity);
-        break;
-      case 'payment.dispute.lost':
-        await handleDisputeLost(payload.payment.entity);
-        break;
-      case 'payment.dispute.closed':
-        await handleDisputeClosed(payload.payment.entity);
-        break;
-      case 'payment.dispute.under_review':
-        await handleDisputeUnderReview(payload.payment.entity);
-        break;
-      case 'payment.dispute.action_required':
-        await handleDisputeActionRequired(payload.payment.entity);
-        break;
-      
-      // Downtime Events
-      case 'payment.downtime.started':
-        await handleDowntimeStarted(payload.downtime.entity);
-        break;
-      case 'payment.downtime.updated':
-        await handleDowntimeUpdated(payload.downtime.entity);
-        break;
-      case 'payment.downtime.resolved':
-        await handleDowntimeResolved(payload.downtime.entity);
-        break;
-      
-      // Invoice Events
-      case 'invoice.paid':
-        await handleInvoicePaid(payload.invoice.entity);
-        break;
-      case 'invoice.partially_paid':
-        await handleInvoicePartiallyPaid(payload.invoice.entity);
-        break;
-      case 'invoice.expired':
-        await handleInvoiceExpired(payload.invoice.entity);
-        break;
-      
-      // Fund Account Events
-      case 'fund_account.validation.completed':
-        await handleFundAccountValidationCompleted(payload.fund_account.entity);
-        break;
-      case 'fund_account.validation.failed':
-        await handleFundAccountValidationFailed(payload.fund_account.entity);
-        break;
-      
-      // Account Events
-      case 'account.instantly_activated':
-        await handleAccountInstantlyActivated(payload.account.entity);
-        break;
-      case 'account.activated_kyc_pending':
-        await handleAccountActivatedKycPending(payload.account.entity);
-        break;
-      
-      // Payment Link Events
-      case 'payment_link.paid':
-        await handlePaymentLinkPaid(payload.payment_link.entity);
-        break;
-      case 'payment_link.partially_paid':
-        await handlePaymentLinkPartiallyPaid(payload.payment_link.entity);
-        break;
-      case 'payment_link.expired':
-        await handlePaymentLinkExpired(payload.payment_link.entity);
-        break;
-      case 'payment_link.cancelled':
-        await handlePaymentLinkCancelled(payload.payment_link.entity);
-        break;
-      
-      default:
-        logger.warn(`Unhandled webhook event: ${event}`);
-        // Still mark as processed to avoid reprocessing
+    const handler = webhookEventHandlers[event];
+    if (handler) {
+      const payloadKey = event.split('.')[0];
+      const entity = payload[payloadKey]?.entity;
+      if (entity) {
+        await handler(entity);
+      } else {
+        logger.warn(`Could not find entity for event: ${event}`, { payload });
+      }
+    } else {
+      logger.warn(`Unhandled webhook event: ${event}`);
     }
 
     // Mark webhook event as processed
@@ -904,8 +839,28 @@ const processDisputeEvent = async (data) => {
     const { disputeId, action } = data;
     logger.info(`Processing dispute event: ${action} for dispute ${disputeId}`);
     
-    // Add dispute-specific processing logic here
-    // This could involve notifying legal team, updating payment status, etc.
+    const dispute = await razorpayService.fetchDispute(disputeId);
+    if (!dispute) {
+      logger.error(`Dispute not found: ${disputeId}`);
+      return { success: false, message: 'Dispute not found' };
+    }
+
+    switch (action) {
+      case 'created':
+        await handleDisputeCreated(dispute);
+        break;
+      case 'won':
+        await handleDisputeWon(dispute);
+        break;
+      case 'lost':
+        await handleDisputeLost(dispute);
+        break;
+      case 'closed':
+        await handleDisputeClosed(dispute);
+        break;
+      default:
+        logger.warn(`Unhandled dispute action: ${action}`);
+    }
     
     return { success: true, disputeId, action };
   } catch (error) {
@@ -919,7 +874,25 @@ const processInvoiceEvent = async (data) => {
     const { invoiceId, action } = data;
     logger.info(`Processing invoice event: ${action} for invoice ${invoiceId}`);
     
-    // Add invoice-specific processing logic here
+    const invoice = await razorpayService.fetchInvoice(invoiceId);
+    if (!invoice) {
+      logger.error(`Invoice not found: ${invoiceId}`);
+      return { success: false, message: 'Invoice not found' };
+    }
+
+    switch (action) {
+      case 'paid':
+        await handleInvoicePaid(invoice);
+        break;
+      case 'partially_paid':
+        await handleInvoicePartiallyPaid(invoice);
+        break;
+      case 'expired':
+        await handleInvoiceExpired(invoice);
+        break;
+      default:
+        logger.warn(`Unhandled invoice action: ${action}`);
+    }
     
     return { success: true, invoiceId, action };
   } catch (error) {
@@ -931,9 +904,30 @@ const processInvoiceEvent = async (data) => {
 const processPaymentLinkEvent = async (data) => {
   try {
     const { paymentLinkId, action } = data;
-    logger.info(`Processing payment link event: ${action} for link ${paymentLinkId}`);
+    logger.info(`Processing payment link event: ${action} for payment link ${paymentLinkId}`);
     
-    // Add payment link-specific processing logic here
+    const paymentLink = await razorpayService.fetchPaymentLink(paymentLinkId);
+    if (!paymentLink) {
+      logger.error(`Payment link not found: ${paymentLinkId}`);
+      return { success: false, message: 'Payment link not found' };
+    }
+
+    switch (action) {
+      case 'paid':
+        await handlePaymentLinkPaid(paymentLink);
+        break;
+      case 'partially_paid':
+        await handlePaymentLinkPartiallyPaid(paymentLink);
+        break;
+      case 'expired':
+        await handlePaymentLinkExpired(paymentLink);
+        break;
+      case 'cancelled':
+        await handlePaymentLinkCancelled(paymentLink);
+        break;
+      default:
+        logger.warn(`Unhandled payment link action: ${action}`);
+    }
     
     return { success: true, paymentLinkId, action };
   } catch (error) {
@@ -947,7 +941,9 @@ const processAccountEvent = async (data) => {
     const { accountId, action } = data;
     logger.info(`Processing account event: ${action} for account ${accountId}`);
     
-    // Add account-specific processing logic here
+    // Note: Razorpay Node SDK might not have a direct fetchAccount method.
+    // This is a placeholder for potential future implementation.
+    logger.warn(`Processing for account event '${action}' is not fully implemented.`);
     
     return { success: true, accountId, action };
   } catch (error) {
@@ -961,7 +957,9 @@ const processFundAccountEvent = async (data) => {
     const { fundAccountId, action } = data;
     logger.info(`Processing fund account event: ${action} for fund account ${fundAccountId}`);
     
-    // Add fund account-specific processing logic here
+    // Note: Razorpay Node SDK might not have a direct fetchFundAccount method.
+    // This is a placeholder for potential future implementation.
+    logger.warn(`Processing for fund account event '${action}' is not fully implemented.`);
     
     return { success: true, fundAccountId, action };
   } catch (error) {
@@ -975,8 +973,9 @@ const processDowntimeEvent = async (data) => {
     const { downtimeId, action } = data;
     logger.info(`Processing downtime event: ${action} for downtime ${downtimeId}`);
     
-    // Add downtime-specific processing logic here
-    // This could involve sending alerts, updating status pages, etc.
+    // Note: Razorpay Node SDK might not have a direct fetchDowntime method.
+    // This is a placeholder for potential future implementation.
+    logger.warn(`Processing for downtime event '${action}' is not fully implemented.`);
     
     return { success: true, downtimeId, action };
   } catch (error) {
@@ -1184,5 +1183,26 @@ export const queueService = {
       logger.error('Error during queue shutdown:', error);
       throw error;
     }
+  },
+
+  // Get queue instance for Bull Board
+  getQueue() {
+    return paymentQueue;
+  },
+
+  async waitForQueue(timeout = 10000) {
+    if (paymentQueue) {
+      return paymentQueue;
+    }
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeout) {
+      if (paymentQueue) {
+        return paymentQueue;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100)); // Poll every 100ms
+    }
+
+    throw new Error('Queue initialization timed out.');
   }
 };

@@ -3,28 +3,34 @@ import { supabaseService } from '../services/supabaseService.js';
 import { queueService } from '../services/queueService.js';
 import { logger } from '../utils/logger.js';
 import { PaymentError, ValidationError } from '../utils/errors.js';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
+
 
 export const createOrder = async (req, res, next) => {
   try {
     const { amount, currency = 'INR', receipt, notes = {} } = req.body;
-    const userId = req.user.userId || req.user.sub;
-    
-    if (!userId) {
-      throw new ValidationError('User ID is required');
+    const userId = req.user?.userId || req.user?.sub;
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      throw new ValidationError('Valid amount is required');
+    }
+
+    const supportedCurrencies = ['INR', 'USD', 'EUR']; // Add your supported currencies
+    if (!supportedCurrencies.includes(currency)) {
+      throw new ValidationError(`Currency must be one of: ${supportedCurrencies.join(', ')}`);
     }
 
     // Generate unique receipt if not provided
-    const orderReceipt = receipt || `order_${Date.now()}_${userId.slice(-8)}`;
-    
+    const orderReceipt = receipt || `order_${Date.now()}_${uuidv4().slice(0, 8)}`;
+
     // Create order in Razorpay
     const razorpayOrder = await razorpayService.createOrder({
       amount: amount * 100, // Convert to paise
       currency,
       receipt: orderReceipt,
       notes: {
-        user_id: userId,
+          ip_address: req.headers['x-forwarded-for']?.split(',')[0] || req.ip,
         ...notes
       }
     });
@@ -67,10 +73,14 @@ export const createOrder = async (req, res, next) => {
 export const capturePayment = async (req, res, next) => {
   try {
     const { paymentId, amount } = req.body;
-    const userId = req.user.userId || req.user.sub;
-    
-    if (!userId) {
-      throw new ValidationError('User ID is required');
+    const userId = req.user?.userId || req.user?.sub;
+
+    if (!paymentId || typeof paymentId !== 'string') {
+      throw new ValidationError('Valid payment ID is required');
+    }
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      throw new ValidationError('Valid amount is required');
     }
 
     // Verify payment belongs to user
@@ -173,10 +183,10 @@ export const verifyWebhook = async (req, res, next) => {
 export const getPaymentStatus = async (req, res, next) => {
   try {
     const { orderId } = req.params;
-    const userId = req.user.userId || req.user.sub;
-    
-    if (!userId) {
-      throw new ValidationError('User ID is required');
+    const userId = req.user?.userId || req.user?.sub;
+
+    if (!orderId) {
+      throw new ValidationError('Order ID is required');
     }
 
     // Get order from database
@@ -218,16 +228,12 @@ export const getPaymentStatus = async (req, res, next) => {
 // Get user payment history
 export const getUserPayments = async (req, res, next) => {
   try {
-    const userId = req.user.userId || req.user.sub;
     const { limit = 10, offset = 0 } = req.query;
-    
-    if (!userId) {
-      throw new ValidationError('User ID is required');
-    }
+    const userId = req.user?.userId || req.user?.sub;
 
-    const payments = await supabaseService.getUserPaymentOrders(
-      userId, 
-      parseInt(limit), 
+    const payments = await supabaseService.getPaymentHistory(
+      userId,
+      parseInt(limit),
       parseInt(offset)
     );
     
@@ -237,7 +243,8 @@ export const getUserPayments = async (req, res, next) => {
       pagination: {
         limit: parseInt(limit),
         offset: parseInt(offset),
-        total: payments.length
+        total: payments.length,
+        total: payments.totalCount || payments.length // Assuming service returns { data: [], totalCount: n }
       }
     });
   } catch (error) {
@@ -250,11 +257,7 @@ export const getUserPayments = async (req, res, next) => {
 export const createRefund = async (req, res, next) => {
   try {
     const { paymentId, amount, reason, receipt } = req.body;
-    const userId = req.user.userId || req.user.sub;
-    
-    if (!userId) {
-      throw new ValidationError('User ID is required');
-    }
+    const userId = req.user?.userId || req.user?.sub;
 
     // Verify payment belongs to user
     const dbPayment = await supabaseService.getPaymentTransaction(paymentId);
@@ -297,11 +300,7 @@ export const createRefund = async (req, res, next) => {
 export const verifyPaymentSignature = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-    const userId = req.user.userId || req.user.sub;
-    
-    if (!userId) {
-      throw new ValidationError('User ID is required');
-    }
+    const userId = req.user?.userId || req.user?.sub;
 
     // Verify order belongs to user
     const dbOrder = await supabaseService.getPaymentOrder(razorpay_order_id);

@@ -1204,5 +1204,81 @@ export const queueService = {
     }
 
     throw new Error('Queue initialization timed out.');
+  },
+
+  // Graceful shutdown support
+  async shutdown() {
+    logger.info('Starting queue service shutdown...');
+    
+    try {
+      if (webhookWorker) {
+        logger.info('Closing webhook worker...');
+        await webhookWorker.close();
+        webhookWorker = null;
+      }
+
+      if (paymentWorker) {
+        logger.info('Closing payment worker...');
+        await paymentWorker.close();
+        paymentWorker = null;
+      }
+
+      if (paymentQueue) {
+        logger.info('Closing payment queue...');
+        await paymentQueue.close();
+        paymentQueue = null;
+      }
+
+      logger.info('Queue service shutdown completed');
+    } catch (error) {
+      logger.error('Error during queue service shutdown:', error);
+      throw error;
+    }
+  },
+
+  // Close Redis connections
+  async closeRedisConnections() {
+    try {
+      if (redisConnection) {
+        logger.info('Closing Redis connection...');
+        await redisConnection.quit();
+        redisConnection = null;
+      }
+      logger.info('Redis connections closed');
+    } catch (error) {
+      logger.error('Error closing Redis connections:', error);
+      throw error;
+    }
+  },
+
+  // Get Redis client for session management
+  async getRedisClient() {
+    if (!redisConnection) {
+      await initializeQueue();
+    }
+    return redisConnection;
+  },
+
+  // Health check
+  async healthCheck() {
+    try {
+      if (!redisConnection) {
+        throw new Error('Redis connection not initialized');
+      }
+
+      await redisConnection.ping();
+      
+      const queueStats = await this.getQueueStats();
+      
+      return {
+        status: 'OK',
+        service: 'queue',
+        redis: 'connected',
+        queue: queueStats
+      };
+    } catch (error) {
+      logger.error('Queue service health check failed:', error);
+      throw error;
+    }
   }
 };

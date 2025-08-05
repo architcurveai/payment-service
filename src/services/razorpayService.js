@@ -1,5 +1,7 @@
 import Razorpay from 'razorpay';
 import { logger } from '../utils/logger.js';
+import { razorpayCircuitBreaker } from '../utils/circuitBreaker.js';
+import { ErrorSanitizer } from '../utils/errorSanitizer.js';
 
 let razorpay = null;
 
@@ -21,17 +23,34 @@ const initializeRazorpay = () => {
 };
 
 const executeRazorpayOperation = async (operationName, operation) => {
-  try {
-    const rzp = initializeRazorpay();
-    if (!rzp) {
-      throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+  return await razorpayCircuitBreaker.execute(async () => {
+    try {
+      const rzp = initializeRazorpay();
+      if (!rzp) {
+        throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+      }
+      
+      const result = await operation(rzp);
+      logger.info(`Razorpay ${operationName} successful`);
+      return result;
+    } catch (error) {
+      // Log the full error internally
+      ErrorSanitizer.logError(error, { operation: operationName });
+      
+      // Re-throw with sanitized message for client
+      const sanitized = ErrorSanitizer.sanitizeError(error);
+      const razorpayError = new Error(sanitized.message);
+      razorpayError.statusCode = sanitized.statusCode;
+      razorpayError.code = sanitized.code;
+      razorpayError.originalError = error; // Keep for internal use
+      
+      throw razorpayError;
     }
-    
-    return await operation(rzp);
-  } catch (error) {
-    logger.error(`Razorpay ${operationName} failed:`, error);
-    throw error;
-  }
+  }, async () => {
+    // Fallback when circuit breaker is open
+    logger.warn(`Razorpay ${operationName} failed - circuit breaker open, using fallback`);
+    throw new Error('Payment service temporarily unavailable. Please try again later.');
+  });
 };
 
 export const razorpayService = {
@@ -93,5 +112,23 @@ export const razorpayService = {
     }
 
     return executeRazorpayOperation('refund fetch', rzp => rzp.refunds.fetch(refundId));
+  },
+
+  // Health check for circuit breaker monitoring
+  async healthCheck() {
+    return executeRazorpayOperation('health check', async (rzp) => {
+      // Simple API call to verify connectivity
+      try {
+        await rzp.orders.all({ count: 1 });
+        return { status: 'OK', service: 'razorpay' };
+      } catch (error) {
+        throw new Error('Razorpay API connectivity check failed');
+      }
+    });
+  },
+
+  // Get circuit breaker status
+  getCircuitBreakerStatus() {
+    return razorpayCircuitBreaker.getState();
   }
 };

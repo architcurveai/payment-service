@@ -9,6 +9,7 @@ import {
   verifyPaymentSignature 
 } from './controllers/paymentController.js';
 import { authenticate } from './middleware/auth.js';
+import { authenticateWithSession, sessionController } from './middleware/sessionAuth.js';
 import { validateOwnership } from './middleware/validateOwnership.js';
 import { validatePayment, validateCapture, validateRefund, validateSignature } from './middleware/validate.js';
 import { queueService } from './services/queueService.js';
@@ -93,5 +94,39 @@ router.get('/admin/webhook-stats', getWebhookStats);
 
 // Clear queue jobs (admin only)
 router.post('/admin/clear-queue', authenticate, clearQueue);
+
+// Session Management Routes
+router.post('/auth/logout', authenticateWithSession, sessionController.invalidateToken);
+router.post('/auth/logout-all', authenticateWithSession, sessionController.invalidateAllSessions);
+router.get('/auth/sessions', authenticateWithSession, sessionController.getActiveSessions);
+
+// Admin session management
+router.get('/admin/session-stats', authenticate, sessionController.getSessionStats);
+
+// Circuit Breaker Status (admin only)
+router.get('/admin/circuit-breaker', authenticate, async (req, res) => {
+  try {
+    const { razorpayService } = await import('./services/razorpayService.js');
+    const { supabaseCircuitBreaker, redisCircuitBreaker } = await import('./utils/circuitBreaker.js');
+    
+    const status = {
+      razorpay: razorpayService.getCircuitBreakerStatus(),
+      supabase: supabaseCircuitBreaker.getState(),
+      redis: redisCircuitBreaker.getState(),
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json({
+      success: true,
+      circuitBreakers: status
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get circuit breaker status',
+      message: error.message
+    });
+  }
+});
 
 export default router;

@@ -9,8 +9,11 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'payment-service' },
   transports: [
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
+    // Only add file transports if logs directory exists or we're in production
+    ...(process.env.NODE_ENV === 'production' || process.env.LOG_TO_FILE === 'true' ? [
+      new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+      new winston.transports.File({ filename: 'logs/combined.log' }),
+    ] : []),
   ],
 });
 

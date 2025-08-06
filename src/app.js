@@ -67,7 +67,7 @@ app.use((error, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost');
 
 // Start server with graceful shutdown support
 const server = app.listen(PORT, HOST, () => {

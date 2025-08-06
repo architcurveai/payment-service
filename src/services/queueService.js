@@ -1164,28 +1164,6 @@ export const queueService = {
     }
   },
 
-  async gracefulShutdown() {
-    try {
-      logger.info('Shutting down queue workers...');
-      
-      if (webhookWorker) {
-        await webhookWorker.close();
-      }
-      
-      if (queueEvents) {
-        await queueEvents.close();
-      }
-      
-      if (redisConnection) {
-        await redisConnection.quit();
-      }
-      
-      logger.info('Queue workers shut down successfully');
-    } catch (error) {
-      logger.error('Error during queue shutdown:', error);
-      throw error;
-    }
-  },
 
   // Get queue instance for Bull Board
   getQueue() {

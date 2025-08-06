@@ -7,8 +7,6 @@ import routes from './routes.js';
 import { logger } from './utils/logger.js';
 import morgan from 'morgan';
 import { setupBullBoard } from './services/bullBoardService.js';
-import { gracefulShutdown } from './utils/gracefulShutdown.js';
-import { ErrorSanitizer } from './utils/errorSanitizer.js';
 
 // Load environment variables
 dotenv.config();
@@ -20,8 +18,13 @@ app.use(helmet());
 app.use(helmet.hsts({ maxAge: 63072000 })); // 2 years
 
 // CORS (restrict origins)
-const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000'];
-app.use(cors({ origin: allowedOrigins, methods: ['POST','GET'] }));
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
+app.use(cors({ 
+  origin: allowedOrigins, 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
 
 // Body Parsing
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
@@ -33,8 +36,6 @@ app.use(morgan('combined', { stream: logger.stream }));
 // Rate Limiting
 app.use(rateLimit);
 
-// Graceful shutdown middleware (reject requests during shutdown)
-app.use(gracefulShutdown.middleware());
 
 // Routes
 app.use('/api/payments', routes);
@@ -56,8 +57,14 @@ async function initializeBullBoard() {
 // Initialize with proper async handling
 initializeBullBoard();
 
-// Global Error Handler with sanitization
-app.use(ErrorSanitizer.middleware());
+// Global Error Handler
+app.use((error, req, res, next) => {
+  logger.error('Unhandled error:', error);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error'
+  });
+});
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || 'localhost';

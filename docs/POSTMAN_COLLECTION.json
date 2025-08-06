@@ -1,0 +1,393 @@
+{
+  "info": {
+    "name": "Payment Gateway API - UUID Integration",
+    "description": "Complete API collection for testing payment gateway with existing UUID system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api/payments",
+      "description": "Base URL for payment API"
+    },
+    {
+      "key": "user_uuid",
+      "value": "123e4567-e89b-12d3-a456-426614174000",
+      "description": "Test user UUID from your auth system"
+    },
+    {
+      "key": "razorpay_key_id",
+      "value": "rzp_test_your_key_id",
+      "description": "Razorpay Key ID"
+    }
+  ],
+  "item": [
+    {
+      "name": "Payment Orders",
+      "item": [
+        {
+          "name": "Create Payment Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 999,\n  \"currency\": \"INR\",\n  \"user_uuid\": \"{{user_uuid}}\",\n  \"customer_info\": {\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"phone\": \"+91-9876543210\"\n  },\n  \"notes\": {\n    \"plan_name\": \"Premium Plan\",\n    \"plan_id\": \"plan_001\",\n    \"subscription_period\": \"monthly\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/create-order",
+              "host": ["{{base_url}}"],
+              "path": ["create-order"]
+            },
+            "description": "Create a new payment order with existing user UUID"
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 999,\n  \"currency\": \"INR\",\n  \"user_uuid\": \"123e4567-e89b-12d3-a456-426614174000\",\n  \"customer_info\": {\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/create-order",
+                  "host": ["{{base_url}}"],
+                  "path": ["create-order"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"order\": {\n    \"id\": \"order_MKlqKqSBdw3sPz\",\n    \"amount\": 99900,\n    \"currency\": \"INR\",\n    \"receipt\": \"order_1703123456_123e4567\",\n    \"status\": \"created\",\n    \"created_at\": 1703123456,\n    \"user_uuid\": \"123e4567-e89b-12d3-a456-426614174000\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Order - Invalid UUID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 999,\n  \"currency\": \"INR\",\n  \"user_uuid\": \"invalid-uuid-format\",\n  \"customer_info\": {\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/create-order",
+              "host": ["{{base_url}}"],
+              "path": ["create-order"]
+            },
+            "description": "Test with invalid UUID format"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment Verification",
+      "item": [
+        {
+          "name": "Verify Payment Signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razorpay_order_id\": \"order_MKlqKqSBdw3sPz\",\n  \"razorpay_payment_id\": \"pay_MKlqLqSBdw3sQb\",\n  \"razorpay_signature\": \"signature_hash_here\",\n  \"user_uuid\": \"{{user_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/verify-signature",
+              "host": ["{{base_url}}"],
+              "path": ["verify-signature"]
+            },
+            "description": "Verify payment signature with user UUID"
+          },
+          "response": [
+            {
+              "name": "Verification Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"razorpay_order_id\": \"order_MKlqKqSBdw3sPz\",\n  \"razorpay_payment_id\": \"pay_MKlqLqSBdw3sQb\",\n  \"razorpay_signature\": \"valid_signature_hash\",\n  \"user_uuid\": \"123e4567-e89b-12d3-a456-426614174000\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/verify-signature",
+                  "host": ["{{base_url}}"],
+                  "path": ["verify-signature"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"verified\": true,\n  \"user_uuid\": \"123e4567-e89b-12d3-a456-426614174000\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Verify Payment - Invalid Signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razorpay_order_id\": \"order_MKlqKqSBdw3sPz\",\n  \"razorpay_payment_id\": \"pay_MKlqLqSBdw3sQb\",\n  \"razorpay_signature\": \"invalid_signature\",\n  \"user_uuid\": \"{{user_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/verify-signature",
+              "host": ["{{base_url}}"],
+              "path": ["verify-signature"]
+            },
+            "description": "Test with invalid payment signature"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment History & Status",
+      "item": [
+        {
+          "name": "Get Payment History by UUID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/uuid/{{user_uuid}}?limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["payments", "uuid", "{{user_uuid}}"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of records to return"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset"
+                }
+              ]
+            },
+            "description": "Get all payment history for a user UUID"
+          },
+          "response": [
+            {
+              "name": "Payment History Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/payments/uuid/{{user_uuid}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["payments", "uuid", "{{user_uuid}}"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"user_uuid\": \"123e4567-e89b-12d3-a456-426614174000\",\n  \"payments\": [\n    {\n      \"id\": \"uuid-order-id\",\n      \"razorpay_order_id\": \"order_MKlqKqSBdw3sPz\",\n      \"amount\": 99900,\n      \"currency\": \"INR\",\n      \"status\": \"paid\",\n      \"created_at\": \"2023-12-21T10:30:00Z\",\n      \"customer_info\": {\n        \"name\": \"John Doe\",\n        \"email\": \"john@example.com\"\n      }\n    }\n  ],\n  \"pagination\": {\n    \"limit\": 10,\n    \"offset\": 0,\n    \"total\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Payment Status by UUID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/status/uuid/{{user_uuid}}/order_MKlqKqSBdw3sPz",
+              "host": ["{{base_url}}"],
+              "path": ["status", "uuid", "{{user_uuid}}", "order_MKlqKqSBdw3sPz"]
+            },
+            "description": "Get specific payment order status by UUID and order ID"
+          },
+          "response": [
+            {
+              "name": "Payment Status Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/status/uuid/{{user_uuid}}/order_MKlqKqSBdw3sPz",
+                  "host": ["{{base_url}}"],
+                  "path": ["status", "uuid", "{{user_uuid}}", "order_MKlqKqSBdw3sPz"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"user_uuid\": \"123e4567-e89b-12d3-a456-426614174000\",\n  \"order\": {\n    \"id\": \"order_MKlqKqSBdw3sPz\",\n    \"amount\": 99900,\n    \"currency\": \"INR\",\n    \"receipt\": \"order_1703123456_123e4567\",\n    \"status\": \"paid\",\n    \"created_at\": 1703123456,\n    \"attempts\": 1,\n    \"notes\": {\n      \"plan_name\": \"Premium Plan\"\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Health & Monitoring",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Check API health status"
+          }
+        },
+        {
+          "name": "Webhook Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/webhook-stats",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "webhook-stats"]
+            },
+            "description": "Get webhook processing statistics"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Error Test Cases",
+      "item": [
+        {
+          "name": "Invalid UUID Format",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/uuid/invalid-uuid",
+              "host": ["{{base_url}}"],
+              "path": ["payments", "uuid", "invalid-uuid"]
+            },
+            "description": "Test with invalid UUID format"
+          }
+        },
+        {
+          "name": "Non-existent UUID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/uuid/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["payments", "uuid", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "Test with valid UUID format but non-existent user"
+          }
+        },
+        {
+          "name": "Missing Required Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_uuid\": \"{{user_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/create-order",
+              "host": ["{{base_url}}"],
+              "path": ["create-order"]
+            },
+            "description": "Test with missing required amount field"
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set dynamic variables",
+          "pm.globals.set('timestamp', Date.now());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test for all requests",
+          "pm.test('Response time is less than 5000ms', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});",
+          "",
+          "pm.test('Response has proper content type', function () {",
+          "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "});"
+        ]
+      }
+    }
+  ]
+}

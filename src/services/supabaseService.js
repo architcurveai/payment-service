@@ -8,9 +8,23 @@ const initializeSupabase = () => {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    if (!supabaseUrl || !supabaseKey) {
-      logger.error('Supabase configuration missing. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
-      throw new Error('Supabase not configured');
+    // Check if we're in development mode with placeholder values
+    const isPlaceholder = supabaseUrl?.includes('placeholder') || supabaseKey?.includes('placeholder');
+    
+    if (!supabaseUrl || !supabaseKey || isPlaceholder) {
+      logger.warn('Supabase configuration missing or using placeholders. Running in mock mode for development.');
+      // Return a mock client that doesn't actually connect
+      supabase = {
+        isMock: true,
+        from: () => ({
+          insert: () => ({ data: { id: 'mock-id' }, error: null }),
+          update: () => ({ data: { id: 'mock-id' }, error: null }),
+          select: () => ({ data: [], error: null }),
+          delete: () => ({ data: { id: 'mock-id' }, error: null })
+        })
+      };
+      logger.info('Supabase mock client initialized for development');
+      return supabase;
     }
     
     supabase = createClient(supabaseUrl, supabaseKey, {
@@ -28,6 +42,17 @@ const initializeSupabase = () => {
 const executeQuery = async (operation, tableName, logMessageFn) => {
   try {
     const client = initializeSupabase();
+    
+    // Handle mock client
+    if (client.isMock) {
+      logger.info(`Mock operation on ${tableName} - skipping actual database call`);
+      const mockResult = { data: { id: `mock-${Date.now()}` }, error: null };
+      if (logMessageFn) {
+        logger.info(logMessageFn(mockResult.data));
+      }
+      return mockResult.data;
+    }
+    
     const { data, error } = await operation(client);
 
     if (error) {
@@ -241,6 +266,75 @@ export const supabaseService = {
       (client) => client.from('payment_link_events').update(updateData).eq('razorpay_payment_link_id', paymentLinkId).select().single(),
       'payment_link_events',
       () => `Payment link event updated in DB: ${paymentLinkId}`
+    );
+  },
+
+  // UUID-based payment order operations
+  async getPaymentOrderByUUID(orderId, userUuid) {
+    return executeQuery(
+      (client) => client
+        .from('payment_orders')
+        .select('*')
+        .eq('razorpay_order_id', orderId)
+        .eq('user_uuid', userUuid)
+        .single(),
+      'payment_orders'
+    );
+  },
+
+  async updatePaymentOrderByUUID(orderId, userUuid, updateData) {
+    return executeQuery(
+      (client) => client
+        .from('payment_orders')
+        .update(updateData)
+        .eq('razorpay_order_id', orderId)
+        .eq('user_uuid', userUuid)
+        .select()
+        .single(),
+      'payment_orders',
+      () => `Payment order updated for UUID ${userUuid}: ${orderId}`
+    );
+  },
+
+  async getPaymentHistoryByUUID(userUuid, limit = 10, offset = 0) {
+    return executeQuery(
+      (client) => client
+        .from('payment_orders')
+        .select(`
+          *,
+          payment_transactions (*)
+        `)
+        .eq('user_uuid', userUuid)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1),
+      'payment_orders'
+    );
+  },
+
+  // UUID-based payment transaction operations
+  async updatePaymentTransactionByUUID(paymentId, userUuid, updateData) {
+    return executeQuery(
+      (client) => client
+        .from('payment_transactions')
+        .update(updateData)
+        .eq('razorpay_payment_id', paymentId)
+        .eq('user_uuid', userUuid)
+        .select()
+        .single(),
+      'payment_transactions',
+      () => `Payment transaction updated for UUID ${userUuid}: ${paymentId}`
+    );
+  },
+
+  async getPaymentTransactionsByUUID(userUuid, limit = 10, offset = 0) {
+    return executeQuery(
+      (client) => client
+        .from('payment_transactions')
+        .select('*')
+        .eq('user_uuid', userUuid)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1),
+      'payment_transactions'
     );
   },
 

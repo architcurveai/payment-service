@@ -177,38 +177,6 @@ const initializeQueue = () => {
   return paymentQueue;
 };
 
-const webhookEventHandlers = {
-  'payment.authorized': handlePaymentAuthorized,
-  'payment.captured': handlePaymentCaptured,
-  'payment.failed': handlePaymentFailed,
-  'order.paid': handleOrderPaid,
-  'order.notification.delivered': handleOrderNotificationDelivered,
-  'order.notification.failed': handleOrderNotificationFailed,
-  'refund.created': handleRefundCreated,
-  'refund.processed': handleRefundProcessed,
-  'refund.failed': handleRefundFailed,
-  'refund.speed_changed': handleRefundSpeedChanged,
-  'payment.dispute.created': handleDisputeCreated,
-  'payment.dispute.won': handleDisputeWon,
-  'payment.dispute.lost': handleDisputeLost,
-  'payment.dispute.closed': handleDisputeClosed,
-  'payment.dispute.under_review': handleDisputeUnderReview,
-  'payment.dispute.action_required': handleDisputeActionRequired,
-  'payment.downtime.started': handleDowntimeStarted,
-  'payment.downtime.updated': handleDowntimeUpdated,
-  'payment.downtime.resolved': handleDowntimeResolved,
-  'invoice.paid': handleInvoicePaid,
-  'invoice.partially_paid': handleInvoicePartiallyPaid,
-  'invoice.expired': handleInvoiceExpired,
-  'fund_account.validation.completed': handleFundAccountValidationCompleted,
-  'fund_account.validation.failed': handleFundAccountValidationFailed,
-  'account.instantly_activated': handleAccountInstantlyActivated,
-  'account.activated_kyc_pending': handleAccountActivatedKycPending,
-  'payment_link.paid': handlePaymentLinkPaid,
-  'payment_link.partially_paid': handlePaymentLinkPartiallyPaid,
-  'payment_link.expired': handlePaymentLinkExpired,
-  'payment_link.cancelled': handlePaymentLinkCancelled,
-};
 
 const processWebhookEvent = async (eventData) => {
   try {
@@ -789,6 +757,40 @@ const handlePaymentLinkCancelled = async (paymentLink) => {
     logger.error(`Error handling payment link cancelled: ${paymentLink.id}`, error);
     throw error;
   }
+};
+
+// Webhook event handlers mapping - defined after all handler functions
+const webhookEventHandlers = {
+  'payment.authorized': handlePaymentAuthorized,
+  'payment.captured': handlePaymentCaptured,
+  'payment.failed': handlePaymentFailed,
+  'order.paid': handleOrderPaid,
+  'order.notification.delivered': handleOrderNotificationDelivered,
+  'order.notification.failed': handleOrderNotificationFailed,
+  'refund.created': handleRefundCreated,
+  'refund.processed': handleRefundProcessed,
+  'refund.failed': handleRefundFailed,
+  'refund.speed_changed': handleRefundSpeedChanged,
+  'payment.dispute.created': handleDisputeCreated,
+  'payment.dispute.won': handleDisputeWon,
+  'payment.dispute.lost': handleDisputeLost,
+  'payment.dispute.closed': handleDisputeClosed,
+  'payment.dispute.under_review': handleDisputeUnderReview,
+  'payment.dispute.action_required': handleDisputeActionRequired,
+  'payment.downtime.started': handleDowntimeStarted,
+  'payment.downtime.updated': handleDowntimeUpdated,
+  'payment.downtime.resolved': handleDowntimeResolved,
+  'invoice.paid': handleInvoicePaid,
+  'invoice.partially_paid': handleInvoicePartiallyPaid,
+  'invoice.expired': handleInvoiceExpired,
+  'fund_account.validation.completed': handleFundAccountValidationCompleted,
+  'fund_account.validation.failed': handleFundAccountValidationFailed,
+  'account.instantly_activated': handleAccountInstantlyActivated,
+  'account.activated_kyc_pending': handleAccountActivatedKycPending,
+  'payment_link.paid': handlePaymentLinkPaid,
+  'payment_link.partially_paid': handlePaymentLinkPartiallyPaid,
+  'payment_link.expired': handlePaymentLinkExpired,
+  'payment_link.cancelled': handlePaymentLinkCancelled
 };
 
 const processPaymentStatusUpdate = async (data) => {

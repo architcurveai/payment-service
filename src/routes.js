@@ -6,7 +6,9 @@ import {
   getPaymentStatus, 
   getUserPayments, 
   createRefund, 
-  verifyPaymentSignature 
+  verifyPaymentSignature,
+  getPaymentsByUUID,
+  getPaymentStatusByUUID
 } from './controllers/paymentController.js';
 import { authenticate } from './middleware/auth.js';
 import { authenticateWithSession, sessionController } from './middleware/sessionAuth.js';
@@ -15,11 +17,12 @@ import { validatePayment, validateCapture, validateRefund, validateSignature } f
 import { queueService } from './services/queueService.js';
 import { getBullBoardStats } from './services/bullBoardService.js';
 import { getSimpleDashboard, getWebhookStats, clearQueue } from './controllers/dashboardController.js';
+import { getPricingPlans, createPlanPayment, verifyPlanPayment, getUserPlanStatus } from './controllers/planController.js';
 
 const router = express.Router();
 
-// Create payment order
-router.post('/create-order', authenticate, validatePayment, createOrder);
+// Create payment order - Updated to support UUID (authentication optional)
+router.post('/create-order', validatePayment, createOrder);
 
 // Capture payment
 router.post('/capture', authenticate, validateCapture, capturePayment);
@@ -33,8 +36,8 @@ router.get('/history', authenticate, getUserPayments);
 // Create refund
 router.post('/refund', authenticate, validateRefund, createRefund);
 
-// Verify payment signature (for frontend)
-router.post('/verify-signature', authenticate, validateSignature, verifyPaymentSignature);
+// Verify payment signature (for frontend) - Updated to support UUID
+router.post('/verify-signature', validateSignature, verifyPaymentSignature);
 
 // Webhook for payment verification (no auth required)
 router.post('/webhook', verifyWebhook);
@@ -102,6 +105,16 @@ router.get('/auth/sessions', authenticateWithSession, sessionController.getActiv
 
 // Admin session management
 router.get('/admin/session-stats', authenticate, sessionController.getSessionStats);
+
+// UUID-based routes (no authentication required)
+router.get('/payments/uuid/:user_uuid', getPaymentsByUUID);
+router.get('/status/uuid/:user_uuid/:orderId', getPaymentStatusByUUID);
+
+// Plan-based payment routes (for pricing page integration)
+router.get('/plans', getPricingPlans);
+router.post('/plan/create-payment', createPlanPayment); // No auth required for UUID-based payments
+router.post('/plan/verify-payment', verifyPlanPayment); // No auth required for UUID-based verification
+router.get('/plan/status/:user_uuid', getUserPlanStatus); // Get user's plan subscription status
 
 // Circuit Breaker Status (admin only)
 router.get('/admin/circuit-breaker', authenticate, async (req, res) => {

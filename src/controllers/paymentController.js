@@ -9,8 +9,28 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const createOrder = async (req, res, next) => {
   try {
-    const { amount, currency = 'INR', receipt, notes = {} } = req.body;
+    const { 
+      amount, 
+      currency = 'INR', 
+      receipt, 
+      notes = {},
+      user_uuid,  // NEW: UUID from frontend
+      customer_info = {} // Optional customer details
+    } = req.body;
+    
     const userId = req.user?.userId || req.user?.sub;
+
+    // Validate UUID if provided (for frontend integration)
+    if (user_uuid) {
+      if (typeof user_uuid !== 'string') {
+        throw new ValidationError('user_uuid must be a string');
+      }
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(user_uuid)) {
+        throw new ValidationError('Invalid UUID format');
+      }
+    }
 
     if (!amount || typeof amount !== 'number' || amount <= 0) {
       throw new ValidationError('Valid amount is required');
@@ -22,7 +42,7 @@ export const createOrder = async (req, res, next) => {
     }
 
     // Generate unique receipt if not provided
-    const orderReceipt = receipt || `order_${Date.now()}_${uuidv4().slice(0, 8)}`;
+    const orderReceipt = receipt || `order_${Date.now()}_${user_uuid ? user_uuid.slice(0, 8) : uuidv4().slice(0, 8)}`;
 
     // Create order in Razorpay
     const razorpayOrder = await razorpayService.createOrder({
@@ -30,7 +50,8 @@ export const createOrder = async (req, res, next) => {
       currency,
       receipt: orderReceipt,
       notes: {
-          ip_address: req.headers['x-forwarded-for']?.split(',')[0] || req.ip,
+        user_uuid: user_uuid || null,
+        ip_address: req.headers['x-forwarded-for']?.split(',')[0] || req.ip,
         ...notes
       }
     });
@@ -38,20 +59,27 @@ export const createOrder = async (req, res, next) => {
     // Save order in database
     const dbOrder = await supabaseService.createPaymentOrder({
       user_id: userId,
+      user_uuid: user_uuid || null, // Store UUID from frontend
       razorpay_order_id: razorpayOrder.id,
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       receipt: razorpayOrder.receipt,
       status: 'created',
       notes: razorpayOrder.notes,
+      customer_info, // Store customer details
       metadata: {
-        created_via: 'api',
+        created_via: user_uuid ? 'frontend_uuid' : 'api',
         ip_address: req.ip,
-        user_agent: req.get('User-Agent')
+        user_agent: req.get('User-Agent'),
+        frontend_uuid: user_uuid || null
       }
     });
     
-    logger.info(`Order created: ${razorpayOrder.id}`, { userId, dbOrderId: dbOrder.id });
+    logger.info(`Order created: ${razorpayOrder.id}`, { 
+      userId, 
+      user_uuid, 
+      dbOrderId: dbOrder.id 
+    });
     
     res.status(201).json({ 
       success: true, 
@@ -61,7 +89,8 @@ export const createOrder = async (req, res, next) => {
         currency: razorpayOrder.currency,
         receipt: razorpayOrder.receipt,
         status: razorpayOrder.status,
-        created_at: razorpayOrder.created_at
+        created_at: razorpayOrder.created_at,
+        user_uuid: user_uuid || null // Return UUID for frontend reference
       }
     });
   } catch (error) {
@@ -299,12 +328,25 @@ export const createRefund = async (req, res, next) => {
 // Verify payment signature (for frontend verification)
 export const verifyPaymentSignature = async (req, res, next) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const { 
+      razorpay_order_id, 
+      razorpay_payment_id, 
+      razorpay_signature,
+      user_uuid // NEW: UUID from frontend
+    } = req.body;
     const userId = req.user?.userId || req.user?.sub;
 
-    // Verify order belongs to user
+    // Get order from database
     const dbOrder = await supabaseService.getPaymentOrder(razorpay_order_id);
-    if (!dbOrder || dbOrder.user_id !== userId) {
+    if (!dbOrder) {
+      throw new PaymentError('Order not found', 404);
+    }
+
+    // Verify ownership - either by user_id OR user_uuid
+    const isAuthorized = (userId && dbOrder.user_id === userId) || 
+                        (user_uuid && dbOrder.user_uuid === user_uuid);
+    
+    if (!isAuthorized) {
       throw new PaymentError('Order not found or unauthorized', 404);
     }
     
@@ -325,12 +367,13 @@ export const verifyPaymentSignature = async (req, res, next) => {
       try {
         await supabaseService.createPaymentTransaction({
           user_id: userId,
+          user_uuid: user_uuid || dbOrder.user_uuid, // Store UUID
           razorpay_payment_id,
           razorpay_order_id,
           amount: dbOrder.amount,
           currency: dbOrder.currency,
           status: 'authorized',
-          notes: {}
+          notes: { verified_with_uuid: user_uuid || null }
         });
       } catch (error) {
         // Payment might already exist, update it
@@ -346,14 +389,112 @@ export const verifyPaymentSignature = async (req, res, next) => {
         updated_at: new Date().toISOString()
       });
       
-      logger.info(`Payment signature verified: ${razorpay_payment_id}`, { userId });
-      res.json({ success: true, verified: true });
+      logger.info(`Payment signature verified: ${razorpay_payment_id}`, { userId, user_uuid });
+      res.json({ 
+        success: true, 
+        verified: true,
+        user_uuid: user_uuid || dbOrder.user_uuid
+      });
     } else {
-      logger.warn(`Payment signature verification failed: ${razorpay_payment_id}`, { userId });
-      res.status(400).json({ success: false, verified: false, error: 'Invalid signature' });
+      logger.warn(`Payment signature verification failed: ${razorpay_payment_id}`, { userId, user_uuid });
+      res.status(400).json({ 
+        success: false, 
+        verified: false, 
+        error: 'Invalid signature',
+        user_uuid: user_uuid || dbOrder.user_uuid
+      });
     }
   } catch (error) {
     logger.error('Error verifying payment signature:', error);
+    next(error);
+  }
+};
+
+// Get payment history by UUID (no authentication required)
+export const getPaymentsByUUID = async (req, res, next) => {
+  try {
+    const { user_uuid } = req.params;
+    const { limit = 10, offset = 0 } = req.query;
+
+    if (!user_uuid) {
+      throw new ValidationError('user_uuid is required');
+    }
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(user_uuid)) {
+      throw new ValidationError('Invalid UUID format');
+    }
+
+    const payments = await supabaseService.getPaymentHistoryByUUID(
+      user_uuid,
+      parseInt(limit),
+      parseInt(offset)
+    );
+    
+    res.json({
+      success: true,
+      user_uuid,
+      payments,
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        total: payments.length
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting payments by UUID:', error);
+    next(error);
+  }
+};
+
+// Get payment status by UUID (no authentication required)
+export const getPaymentStatusByUUID = async (req, res, next) => {
+  try {
+    const { user_uuid, orderId } = req.params;
+    
+    if (!user_uuid || !orderId) {
+      throw new ValidationError('user_uuid and orderId are required');
+    }
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(user_uuid)) {
+      throw new ValidationError('Invalid UUID format');
+    }
+    
+    const dbOrder = await supabaseService.getPaymentOrderByUUID(orderId, user_uuid);
+    if (!dbOrder) {
+      throw new PaymentError('Order not found for this UUID', 404);
+    }
+    
+    // Get latest status from Razorpay
+    const razorpayOrder = await razorpayService.fetchOrder(orderId);
+    
+    // Update order status in database if different
+    if (dbOrder.status !== razorpayOrder.status) {
+      await supabaseService.updatePaymentOrderByUUID(orderId, user_uuid, {
+        status: razorpayOrder.status,
+        updated_at: new Date().toISOString()
+      });
+    }
+    
+    res.json({
+      success: true,
+      user_uuid,
+      order: {
+        id: razorpayOrder.id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        receipt: razorpayOrder.receipt,
+        status: razorpayOrder.status,
+        created_at: razorpayOrder.created_at,
+        attempts: razorpayOrder.attempts,
+        notes: razorpayOrder.notes
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting payment status by UUID:', error);
     next(error);
   }
 };
